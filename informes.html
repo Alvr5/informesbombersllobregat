@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="es">
 <head>
@@ -127,7 +128,7 @@ function pad(){
   };
   const clear=()=>{x.clearRect(0,0,c.width,c.height);D.firma='';file.value='';persist()};
   return el('div',{className:'f full'},el('span',{textContent:'Firma (puedes dibujarla o subir una imagen)'}),c,
-    el('div',{},el('label',{},'Subir firma desde imagen ',file)),
+    el('div',{},el('label',{className:'ck'},'Subir firma desde imagen ',file)),
     el('div',{},el('button',{textContent:'Borrar firma',onclick:clear})));
 }
 
@@ -161,20 +162,25 @@ function render(){
 
 /* ---------- PDF ---------- */
 const{PDFDocument,StandardFonts,rgb}=PDFLib;
-const LOGO_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAKCAYAAABi8hdDAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZXd3dy5pbmtzY2FwZS5vcmcb7q4JAAAALElEQVQImWNgwAX+M9AxMPxnYGBgyMvL+89gAyBpgkEB42g0o2hGIz4AAB4qA5n3Wl5kAAAAAElFTkSuQmCC";
+const LOGO_URL = "logobombers.png";
 
 async function mkPdf(){
   const pdf=await PDFDocument.create(),F=await pdf.embedFont(StandardFonts.Helvetica),B=await pdf.embedFont(StandardFonts.HelveticaBold);
   pdf.setTitle('Informe de servicio '+(D.inf||''));
   const W=595,H=842,M=24,CW=W-2*M,K=rgb(0,0,0),WH=rgb(1,1,1),GR=rgb(.35,.35,.35),LG=rgb(.92,.92,.92),kinds=[];let pg,y;
   
+  // Carga correcta de la imagen local mediante fetch
   let logoImage = null;
-  if(LOGO_BASE64 && LOGO_BASE64.startsWith('data:image')){
-    try {
-      const base64Data = LOGO_BASE64.split(',')[1];
-      const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-      logoImage = LOGO_BASE64.includes('image/jpeg') ? await pdf.embedJpg(imageBytes) : await pdf.embedPng(imageBytes);
-    } catch(e) {}
+  try {
+    const res = await fetch(LOGO_URL);
+    if(res.ok){
+      const imageBytes = await res.arrayBuffer();
+      logoImage = LOGO_URL.endsWith('.jpg') || LOGO_URL.endsWith('.jpeg') 
+        ? await pdf.embedJpg(imageBytes) 
+        : await pdf.embedPng(imageBytes);
+    }
+  } catch(e) {
+    console.warn("No se pudo cargar la imagen del logo local", e);
   }
 
   const cl=s=>[...String(s??'')].map(c=>{try{F.widthOfTextAtSize(c,8);return c}catch(e){return '?'}}).join('');
@@ -182,17 +188,58 @@ async function mkPdf(){
   const txt=(s,x,yy,sz=8,f=F,c=K)=>pg.drawText(cl(s),{x,y:yy,size:sz,font:f,color:c});
   const rect=(x,yy,w,h,o={})=>pg.drawRectangle({x,y:yy,width:w,height:h,borderColor:K,borderWidth:.5,...o});
   const last=()=>kinds[kinds.length-1];
-  const np=k=>{pg=pdf.addPage([W,H]);kinds.push(k);
-    if(logoImage){
-      const logoWidth = 75, logoScale = logoWidth / logoImage.width, logoHeight = logoImage.height * logoScale;
-      pg.drawImage(logoImage,{x:M,y:H-38-logoHeight,width:logoWidth,height:logoHeight});
-    } else {
-      txt('bombers',M,H-36,22,B);txt('Generalitat de Catalunya',M+1,H-46,7,F,GR);
+
+  // Encabezado de página: logo a la izquierda
+    // Encabezado de página: logo arriba a la izquierda
+  const np = k => {
+    pg = pdf.addPage([W, H]);
+    kinds.push(k);
+
+    // Logo de Bombers en la esquina superior izquierda
+    if (logoImage) {
+      const logoWidth = 46;
+      const logoScale = logoWidth / logoImage.width;
+      const logoHeight = logoImage.height * logoScale;
+
+      pg.drawImage(logoImage, {
+        x: M,
+        y: H - 12 - logoHeight,
+        width: logoWidth,
+        height: logoHeight
+      });
     }
-    const t1='INFORME DE SERVICIO';txt(t1,W/2-F.widthOfTextAtSize(t1,11)/2,H-34,11);
-    if(k==='v'){const t2='(ATENCIÓN DE VÍCTIMAS)';txt(t2,W/2-F.widthOfTextAtSize(t2,9)/2,H-44,9)}
-    else{const t='Colaboración del 112   INF- '+(D.inf||'');txt(t,W-M-B.widthOfTextAtSize(t,7.5),H-38,7.5,B)}
-    y=H-52};
+
+    // Título centrado en la parte superior
+    const t1 = 'INFORME DE SERVICIO';
+    txt(
+      t1,
+      W / 2 - F.widthOfTextAtSize(t1, 11) / 2,
+      H - 34,
+      11
+    );
+
+    if (k === 'v') {
+      const t2 = '(ATENCIÓN DE VÍCTIMAS)';
+      txt(
+        t2,
+        W / 2 - F.widthOfTextAtSize(t2, 9) / 2,
+        H - 44,
+        9
+      );
+    } else {
+      const t = 'Colaboración del 112   INF- ' + (D.inf || '');
+      txt(
+        t,
+        W - M - B.widthOfTextAtSize(t, 7.5),
+        H - 38,
+        7.5,
+        B
+      );
+    }
+
+    y = H - 52;
+  };
+
   const need=h=>{if(y-h<M+20)np(last()==='v'?'v':'c')};
   const bar=t=>{need(38);rect(M,y-11,CW,11,{color:K});txt(t,M+4,y-8,8,B,WH);y-=11};
   const row=(items,min=18)=>{
