@@ -14,7 +14,6 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-appl
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--panel);z-index:10}
 header{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--panel);border-bottom:1px solid var(--bd);display:flex;gap:8px;align-items:center;padding:8px 12px;overflow-x:auto;white-space:nowrap}
 header b{font-size:16px;margin-right:6px}
-header input{width:200px;margin-left:auto}
 button{font:inherit;color:var(--fg);background:transparent;border:1px solid var(--bd);border-radius:8px;padding:7px 12px;cursor:pointer}
 button.pri{background:var(--acc);color:var(--accfg);border-color:var(--acc);font-weight:600}
 button:disabled{opacity:.5}
@@ -45,7 +44,7 @@ textarea{resize:vertical}
 <header>
   <b>🚒 Informe de servicio</b>
   <button id="bNew">Nuevo</button>
-  <button id="bPdf">⬇ Descargar como PDF</button>
+  <button id="bPdf" class="pri">📥 Descargar como PDF</button>
 </header>
 <main id="form"></main>
 <div id="toast"></div>
@@ -157,29 +156,44 @@ function render(){
   annex.hidden=D.vict!=='si';
   F.append(sec('6. Control de víctimas y firma del informe',el('div',{className:'full'},el('b',{textContent:'¿Existencia de víctimas en la intervención?'}),el('div',{className:'big'},...rad)),fld('autor','Nombre y apellidos del autor','text','w2'),fld('tip','T.I.P. / N.I.P.'),pad()));
   F.append(annex);
-  F.append(el('p',{className:'note',textContent:'Los datos se guardan solo en este dispositivo. Al enviar se genera un PDF con el formato del informe.'}));
+  F.append(el('p',{className:'note',textContent:'Los datos se guardan solo en este dispositivo. Al descargar el PDF se genera con el formato oficial.'}));
 }
 
 /* ---------- PDF ---------- */
 const{PDFDocument,StandardFonts,rgb}=PDFLib;
+const LOGO_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAKCAYAAABi8hdDAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZXd3dy5pbmtzY2FwZS5vcmcb7q4JAAAALElEQVQImWNgwAX+M9AxMPxnYGBgyMvL+89gAyBpgkEB42g0o2hGIz4AAB4qA5n3Wl5kAAAAAElFTkSuQmCC";
+
 async function mkPdf(){
   const pdf=await PDFDocument.create(),F=await pdf.embedFont(StandardFonts.Helvetica),B=await pdf.embedFont(StandardFonts.HelveticaBold);
   pdf.setTitle('Informe de servicio '+(D.inf||''));
-  // Márgenes optimizados y altura útil mayor (M = 24 en vez de 34)
   const W=595,H=842,M=24,CW=W-2*M,K=rgb(0,0,0),WH=rgb(1,1,1),GR=rgb(.35,.35,.35),LG=rgb(.92,.92,.92),kinds=[];let pg,y;
+  
+  let logoImage = null;
+  if(LOGO_BASE64 && LOGO_BASE64.startsWith('data:image')){
+    try {
+      const base64Data = LOGO_BASE64.split(',')[1];
+      const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+      logoImage = LOGO_BASE64.includes('image/jpeg') ? await pdf.embedJpg(imageBytes) : await pdf.embedPng(imageBytes);
+    } catch(e) {}
+  }
+
   const cl=s=>[...String(s??'')].map(c=>{try{F.widthOfTextAtSize(c,8);return c}catch(e){return '?'}}).join('');
   const wrap=(s,w,sz,f=F)=>String(s??'').split('\n').flatMap(p=>{p=cl(p);const o=[];let l='';for(const wd of p.split(' ')){const t=l?l+' '+wd:wd;if(l&&f.widthOfTextAtSize(t,sz)>w){o.push(l);l=wd}else l=t}o.push(l);return o});
   const txt=(s,x,yy,sz=8,f=F,c=K)=>pg.drawText(cl(s),{x,y:yy,size:sz,font:f,color:c});
   const rect=(x,yy,w,h,o={})=>pg.drawRectangle({x,y:yy,width:w,height:h,borderColor:K,borderWidth:.5,...o});
   const last=()=>kinds[kinds.length-1];
   const np=k=>{pg=pdf.addPage([W,H]);kinds.push(k);
-    txt('bombers',M,H-36,22,B);txt('Generalitat de Catalunya',M+1,H-46,7,F,GR);
+    if(logoImage){
+      const logoWidth = 75, logoScale = logoWidth / logoImage.width, logoHeight = logoImage.height * logoScale;
+      pg.drawImage(logoImage,{x:M,y:H-38-logoHeight,width:logoWidth,height:logoHeight});
+    } else {
+      txt('bombers',M,H-36,22,B);txt('Generalitat de Catalunya',M+1,H-46,7,F,GR);
+    }
     const t1='INFORME DE SERVICIO';txt(t1,W/2-F.widthOfTextAtSize(t1,11)/2,H-34,11);
     if(k==='v'){const t2='(ATENCIÓN DE VÍCTIMAS)';txt(t2,W/2-F.widthOfTextAtSize(t2,9)/2,H-44,9)}
     else{const t='Colaboración del 112   INF- '+(D.inf||'');txt(t,W-M-B.widthOfTextAtSize(t,7.5),H-38,7.5,B)}
     y=H-52};
   const need=h=>{if(y-h<M+20)np(last()==='v'?'v':'c')};
-  // Barras de sección más compactas (altura 11 en vez de 13)
   const bar=t=>{need(38);rect(M,y-11,CW,11,{color:K});txt(t,M+4,y-8,8,B,WH);y-=11};
   const row=(items,min=18)=>{
     const h=Math.max(min,...items.map(it=>it.draw?0:(it.l?9:2)+wrap(it.v,it.w*CW-6,it.sz||8,it.b?B:F).length*((it.sz||8)+1)+2));
@@ -203,28 +217,21 @@ async function mkPdf(){
   row([{l:'FECHA DEL SERVICIO',v:fd(D.fecha),w:.18},{l:'ZONA DE LOCALIZACIÓN (ABP)',v:D.zona,w:.27},{l:'LUGAR DE SALIDA',v:D.lugar,w:.27},{l:'MOTIVO INICIAL DE ALERTA',v:D.motivo,w:.28}]);
   row([{l:'MUNICIPIO / DISTRITO',v:D.muni,w:.45},{l:'DIRECCIÓN PRECISA / PUNTO KILOMÉTRICO / REFERENCIA',v:D.dir,w:.55}]);
   row(TIMES.map(([k,l])=>({l:l.toUpperCase(),v:D[k],w:1/6,al:'c'})),20);
-  
   bar('2. CLASIFICACIÓN GENERAL DE LA ACTUACIÓN');
   {const h=Math.max(...['inc','sin','act','man'].map(g=>gh(g,1)));need(h);rect(M,y-h,CW,h);['inc','sin','act','man'].forEach((g,i)=>grp(g,M+4+i*CW/4,y,CW/4-6));y-=h}
-  
   bar('3. DOTACIONES DESPLAZADAS (HASTA 5 DOTACIONES)');
   row([{v:'INDICATIVO',w:.14,b:1,sz:6.5,fill:LG},{v:'TIPO DE VEHÍCULO / FUNCIÓN',w:.46,b:1,sz:6.5,fill:LG},{v:'DOTACIÓN DE PERSONAL / CÓDIGO SALIDA',w:.4,b:1,sz:6.5,fill:LG}],10);
   for(let i=0;i<5;i++)row([{v:'D-'+(i+1)+':',w:.14,sz:7.5},{v:D['dt'+i],w:.46,sz:7.5},{v:D['dp'+i],w:.4,sz:7.5}],10);
-  
   bar('3B. REGISTRO DE PERSONAL INTERVINIENTE');
   row([{v:'CARGO / INDICATIVO',w:.2,b:1,sz:6.5,fill:LG},{v:'NOMBRE Y APELLIDOS',w:.4,b:1,sz:6.5,fill:LG},{v:'T.I.P. / N.I.P.',w:.17,b:1,sz:6.5,fill:LG},{v:'UNIDAD / VEHÍCULO',w:.23,b:1,sz:6.5,fill:LG}],10);
   PERS.forEach((p,i)=>row([{v:p,w:.2,sz:7.5,b:i<4},{v:D['pn'+i],w:.4,sz:7.5},{v:D['pt'+i],w:.17,sz:7.5},{v:D['pu'+i],w:.23,sz:7.5}],10));
-  
   bar('3C. CONTROL DE EPIS Y EQUIPOS DE PROTECCIÓN');
   {const h=42;need(h);rect(M,y-h,CW,h);grp('epi',M+4,y,CW*.62-8,3);txt('Otro EPI (especificar): '+(D.otroepi||''),M+4,y-h+5,7.5);
    const rx=M+CW*.64;txt('CONTROL ERA / BOTELLAS',rx,y-8,6,B);txt('Cantidad bomberos con ERA: '+(D.era||'____'),rx,y-20,7.5);txt('Recargas de ERA necesarias: '+(D.recargas||'____'),rx,y-31,7.5);y-=h}
-  
   bar('4. EVALUACIÓN Y CUERPOS EXTERNOS ACTUANTES');
   {const h=40;need(h);rect(M,y-h,CW,h);grp('est',M+4,y,CW*.58-8,2);const rx=M+CW*.6;grp('cue',rx,y,CW*.4-6,3);txt('Especificar otros: '+(D.otrosesp||''),rx,y-h+4,7);y-=h}
-  
   bar('5. RELATO DESCRIPTIVO Y TÁCTICO DE LA INTERVENCIÓN');
   tbox(D.relato,75);
-  
   bar('6. CONTROL DE VÍCTIMAS Y FIRMA DEL INFORME');
   {const h=74;need(h);rect(M,y-h,CW,h);const mx=M+CW*.5;pg.drawLine({start:{x:mx,y:y},end:{x:mx,y:y-h},thickness:.5,color:K});
    const q='¿EXISTENCIA DE VÍCTIMAS EN LA INTERVENCIÓN?';txt(q,M+CW*.25-B.widthOfTextAtSize(q,8)/2,y-28,8,B);
@@ -254,7 +261,7 @@ async function mkPdf(){
   return pdf.save();
 }
 
-/* ---------- Guardar y enviar ---------- */
+/* ---------- Guardar ---------- */
 const fname=()=>('informe-servicio'+(D.inf?'-INF-'+D.inf:'')+(D.fecha?'-'+D.fecha:'')).replace(/[^\w\-]+/g,'_')+'.pdf';
 async function save(bytes,name){
   let dl=null;try{if(window.claude&&claude.use)dl=await claude.use('downloads')}catch(e){}
@@ -263,23 +270,13 @@ async function save(bytes,name){
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);return true;
 }
 function check(){if(!D.vict){toast('Indica en la sección 6 si hay víctimas (SÍ / NO)');return false}return true}
-async function run(fn){const bs=[$('#bPdf'),$('#bSend')];bs.forEach(b=>b.disabled=true);try{await fn()}catch(e){toast('No se pudo generar el PDF')}bs.forEach(b=>b.disabled=false)}
-$('#bPdf').onclick=()=>check()&&run(async()=>{if(await save(await mkPdf(),fname()))toast('PDF listo')});
-$('#bSend').onclick=()=>check()&&run(async()=>{
-  const bytes=await mkPdf(),name=fname(),subj='Informe de servicio'+(D.inf?' INF-'+D.inf:'')+(D.fecha?' · '+fd(D.fecha):'');
-  const body=[subj,D.muni&&'Municipio: '+D.muni,D.lugar&&'Lugar: '+D.lugar,D.autor&&'Autor: '+D.autor,'','(Se adjunta el informe en PDF)'].filter(x=>x!==''&&x!==undefined&&x!==false||x==='').join('\n');
-  try{const f=new File([bytes],name,{type:'application/pdf'});
-    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:subj,text:body});return}}
-  catch(e){if(e&&e.name==='AbortError')return}
-  if(!await save(bytes,name))return;
-  const a=el('a',{href:'mailto:'+(D.to||'')+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body),target:'_blank'});
-  document.body.append(a);a.click();a.remove();
-  toast('PDF descargado. Adjúntalo al correo que se ha abierto.');
-});
-$('#to').value=D.to||'';$('#to').oninput=e=>{D.to=e.target.value.trim();persist()};
+async function run(fn){const bs=[$('#bPdf')];bs.forEach(b=>b.disabled=true);try{await fn()}catch(e){toast('No se pudo generar el PDF')}bs.forEach(b=>b.disabled=false)}
+
+$('#bPdf').onclick=()=>check()&&run(async()=>{if(await save(await mkPdf(),fname()))toast('PDF descargado correctamente')});
+
 $('#bNew').onclick=()=>{
-  if(!confirm('¿Empezar un informe nuevo? Se borrarán los datos actuales (se conservan tu nombre, firma y correo).'))return;
-  D={to:D.to,autor:D.autor,tip:D.tip,firma:D.firma,fecha:new Date().toISOString().slice(0,10)};persist();render();scrollTo(0,0);
+  if(!confirm('¿Empezar un informe nuevo? Se borrarán los datos actuales (se conservan tu nombre y firma).'))return;
+  D={autor:D.autor,tip:D.tip,firma:D.firma,fecha:new Date().toISOString().slice(0,10)};persist();render();scrollTo(0,0);
 };
 render();
 })();
