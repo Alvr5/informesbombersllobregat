@@ -45,9 +45,7 @@ textarea{resize:vertical}
 <header>
   <b>🚒 Informe de servicio</b>
   <button id="bNew">Nuevo</button>
-  <button id="bPdf">⬇ PDF</button>
-  <button id="bSend" class="pri">✉ Enviar</button>
-  <input id="to" type="email" placeholder="Enviar a (correo)">
+  <button id="bPdf">⬇ Descargar como PDF</button>
 </header>
 <main id="form"></main>
 <div id="toast"></div>
@@ -61,15 +59,15 @@ const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearT
 const fd=s=>s?s.split('-').reverse().join('/'):'';
 
 const CG={
- inc:['Incidencias generales',[['edif','Edificación / Inmueble'],['veg','Vegetación / Forestal'],['veh','Vehículo / Transporte']]],
- sin:['Siniestros y rescates',[['trafico','Accidente Tráfico'],['medio','Rescate Medio Natural'],['viv','Apertura de Vivienda']]],
- act:['Actuaciones operativas',[['sane','Saneamiento / Estructura'],['gas','Fuga Gas / R. Químico'],['obst','Retirada Obstáculos']]],
- man:['Mantenimiento y prevención',[['insp','Inspección / Retén'],['falsa','Falsa Alarma'],['asist','Asistencia Técnica']]],
- epi:['Equipos de protección utilizados',[['era','EPI Pesado con ERA'],['sinera','EPI Pesado sin ERA'],['acu','EPI Acuático'],['for','EPI Forestal'],['par','EPI de Parque'],['otro','Otro EPI']]],
- est:['Afectación estructural / riesgo',[['s0','Sin riesgo colapso'],['forj','Daños en forjado'],['prec','Inmueble precintado'],['rc','Riesgo colapso inminente'],['fuego','Daños por fuego/carga'],['apun','Apuntalamiento necesario']]],
- cue:['Cuerpos actuantes en el lugar',[['sem','S.E.M.'],['mos',"Mossos d'Esquadra"],['gub','GUB'],['pl','PL'],['otros','Otros']]],
- tec:['Técnicas de rescate / extracción',[['rau','Extracción rápida (Rautek)'],['exc','Excarcelación pesada (Corte/Separador)'],['alt','Rescate en altura (Autoescala / Cuerdas)'],['bus','Búsqueda en estructura colapsada']]],
- vit:['Soporte vital / primera atención bomberos',[['oxi','Oxigenoterapia / Vía Aérea'],['hem','Control de Hemorragias (Torniquete)'],['inm','Inmovilización (Collarín/Tablero)'],['rcp','RCP Básico / Reanimación']]]
+  inc:['Incidencias generales',[['edif','Edificación / Inmueble'],['veg','Vegetación / Forestal'],['veh','Vehículo / Transporte']]],
+  sin:['Siniestros y rescates',[['trafico','Accidente Tráfico'],['medio','Rescate Medio Natural'],['viv','Apertura de Vivienda']]],
+  act:['Actuaciones operativas',[['sane','Saneamiento / Estructura'],['gas','Fuga Gas / R. Químico'],['obst','Retirada Obstáculos']]],
+  man:['Mantenimiento y prevención',[['insp','Inspección / Retén'],['falsa','Falsa Alarma'],['asist','Asistencia Técnica']]],
+  epi:['Equipos de protección utilizados',[['era','EPI Pesado con ERA'],['sinera','EPI Pesado sin ERA'],['acu','EPI Acuático'],['for','EPI Forestal'],['par','EPI de Parque'],['otro','Otro EPI']]],
+  est:['Afectación estructural / riesgo',[['s0','Sin riesgo colapso'],['forj','Daños en forjado'],['prec','Inmueble precintado'],['rc','Riesgo colapso inminente'],['fuego','Daños por fuego/carga'],['apun','Apuntalamiento necesario']]],
+  cue:['Cuerpos actuantes en el lugar',[['sem','S.E.M.'],['mos',"Mossos d'Esquadra"],['gub','GUB'],['pl','PL'],['otros','Otros']]],
+  tec:['Técnicas de rescate / extracción',[['rau','Extracción rápida (Rautek)'],['exc','Excarcelación pesada (Corte/Separador)'],['alt','Rescate en altura (Autoescala / Cuerdas)'],['bus','Búsqueda en estructura colapsada']]],
+  vit:['Soporte vital / primera atención bomberos',[['oxi','Oxigenoterapia / Vía Aérea'],['hem','Control de Hemorragias (Torniquete)'],['inm','Inmovilización (Collarín/Tablero)'],['rcp','RCP Básico / Reanimación']]]
 };
 const TIMES=[['aviso','Aviso 112'],['salida','Salida'],['llegada','Llegada lugar'],['control','Control incidente'],['fin','Fin servicio'],['regreso','Regreso base']];
 const PERS=['SCTE','5-06-90','Cap Intervenció','Cap Dotació',...Array.from({length:10},(_,i)=>'B-'+(i+1))];
@@ -167,83 +165,92 @@ const{PDFDocument,StandardFonts,rgb}=PDFLib;
 async function mkPdf(){
   const pdf=await PDFDocument.create(),F=await pdf.embedFont(StandardFonts.Helvetica),B=await pdf.embedFont(StandardFonts.HelveticaBold);
   pdf.setTitle('Informe de servicio '+(D.inf||''));
-  const W=595,H=842,M=34,CW=W-2*M,K=rgb(0,0,0),WH=rgb(1,1,1),GR=rgb(.35,.35,.35),LG=rgb(.92,.92,.92),kinds=[];let pg,y;
+  // Márgenes optimizados y altura útil mayor (M = 24 en vez de 34)
+  const W=595,H=842,M=24,CW=W-2*M,K=rgb(0,0,0),WH=rgb(1,1,1),GR=rgb(.35,.35,.35),LG=rgb(.92,.92,.92),kinds=[];let pg,y;
   const cl=s=>[...String(s??'')].map(c=>{try{F.widthOfTextAtSize(c,8);return c}catch(e){return '?'}}).join('');
   const wrap=(s,w,sz,f=F)=>String(s??'').split('\n').flatMap(p=>{p=cl(p);const o=[];let l='';for(const wd of p.split(' ')){const t=l?l+' '+wd:wd;if(l&&f.widthOfTextAtSize(t,sz)>w){o.push(l);l=wd}else l=t}o.push(l);return o});
   const txt=(s,x,yy,sz=8,f=F,c=K)=>pg.drawText(cl(s),{x,y:yy,size:sz,font:f,color:c});
-  const rect=(x,yy,w,h,o={})=>pg.drawRectangle({x,y:yy,width:w,height:h,borderColor:K,borderWidth:.6,...o});
+  const rect=(x,yy,w,h,o={})=>pg.drawRectangle({x,y:yy,width:w,height:h,borderColor:K,borderWidth:.5,...o});
   const last=()=>kinds[kinds.length-1];
   const np=k=>{pg=pdf.addPage([W,H]);kinds.push(k);
-    txt('bombers',M,H-46,24,B);txt('Generalitat de Catalunya',M+1,H-58,7,F,GR);
-    const t1='INFORME DE SERVICIO';txt(t1,W/2-F.widthOfTextAtSize(t1,12)/2,H-42,12);
-    if(k==='v'){const t2='(ATENCIÓN DE VÍCTIMAS)';txt(t2,W/2-F.widthOfTextAtSize(t2,10)/2,H-55,10)}
-    else{const t='Colaboración del 112   INF- '+(D.inf||'');txt(t,W-M-B.widthOfTextAtSize(t,8),H-50,8,B)}
-    y=H-70};
-  const need=h=>{if(y-h<M+24)np(last()==='v'?'v':'c')};
-  const bar=t=>{need(45);rect(M,y-13,CW,13,{color:K});txt(t,M+5,y-9.5,8.5,B,WH);y-=13};
-  const row=(items,min=22)=>{
-    const h=Math.max(min,...items.map(it=>it.draw?0:(it.l?10:3)+wrap(it.v,it.w*CW-8,it.sz||9,it.b?B:F).length*((it.sz||9)+1.5)+2));
+    txt('bombers',M,H-36,22,B);txt('Generalitat de Catalunya',M+1,H-46,7,F,GR);
+    const t1='INFORME DE SERVICIO';txt(t1,W/2-F.widthOfTextAtSize(t1,11)/2,H-34,11);
+    if(k==='v'){const t2='(ATENCIÓN DE VÍCTIMAS)';txt(t2,W/2-F.widthOfTextAtSize(t2,9)/2,H-44,9)}
+    else{const t='Colaboración del 112   INF- '+(D.inf||'');txt(t,W-M-B.widthOfTextAtSize(t,7.5),H-38,7.5,B)}
+    y=H-52};
+  const need=h=>{if(y-h<M+20)np(last()==='v'?'v':'c')};
+  // Barras de sección más compactas (altura 11 en vez de 13)
+  const bar=t=>{need(38);rect(M,y-11,CW,11,{color:K});txt(t,M+4,y-8,8,B,WH);y-=11};
+  const row=(items,min=18)=>{
+    const h=Math.max(min,...items.map(it=>it.draw?0:(it.l?9:2)+wrap(it.v,it.w*CW-6,it.sz||8,it.b?B:F).length*((it.sz||8)+1)+2));
     need(h);let x=M;
-    for(const it of items){const w=it.w*CW,f=it.b?B:F,sz=it.sz||9;
+    for(const it of items){const w=it.w*CW,f=it.b?B:F,sz=it.sz||8;
       rect(x,y-h,w,h,it.fill?{color:it.fill}:{});
-      if(it.l)txt(it.l,it.al==='c'?x+(w-B.widthOfTextAtSize(it.l,6.5))/2:x+3,y-8,6.5,B);
+      if(it.l)txt(it.l,it.al==='c'?x+(w-B.widthOfTextAtSize(it.l,6))/2:x+3,y-7,6,B);
       if(it.draw)it.draw(x,y,w,h);
-      else wrap(it.v,w-8,sz,f).forEach((l,j)=>{const lw=f.widthOfTextAtSize(l,sz);txt(l,it.al==='c'?x+(w-lw)/2:x+4,y-(it.l?17:sz+1)-j*(sz+1.5),sz,f)});
+      else wrap(it.v,w-6,sz,f).forEach((l,j)=>{const lw=f.widthOfTextAtSize(l,sz);txt(l,it.al==='c'?x+(w-lw)/2:x+3,y-(it.l?14:sz)-j*(sz+1),sz,f)});
       x+=w}
     y-=h};
-  const box=(x,yy,on)=>{rect(x,yy,7,7);if(on){const o={thickness:1.1,color:K};pg.drawLine({start:{x:x+1.3,y:yy+3.6},end:{x:x+3,y:yy+1.5},...o});pg.drawLine({start:{x:x+3,y:yy+1.5},end:{x:x+6,y:yy+6},...o})}};
-  const grp=(g,x,top,w,cols=1)=>{const[t,it]=CG[g];txt(t,x,top-8,6.5,B);it.forEach(([k,l],i)=>{const cx=x+(i%cols)*(w/cols),cy=top-20-Math.floor(i/cols)*11;box(cx,cy,!!D[g+'.'+k]);txt(l,cx+10,cy+1,8)})};
-  const gh=(g,cols)=>16+Math.ceil(CG[g][1].length/cols)*11;
-  const tbox=(s,min)=>{let L=wrap(s,CW-10,9.5);
-    for(;;){need(60);const av=y-(M+24),n=Math.max(1,Math.floor((av-8)/11.5)),take=L.splice(0,n),h=L.length?av:Math.min(av,Math.max(min,take.length*11.5+8));
-      rect(M,y-h,CW,h);take.forEach((l,j)=>txt(l,M+5,y-13-j*11.5,9.5));y-=h;if(!L.length)break;np(last()==='v'?'v':'c')}};
+  const box=(x,yy,on)=>{rect(x,yy,6,6);if(on){const o={thickness:1,color:K};pg.drawLine({start:{x:x+1,y:yy+3},end:{x:x+2.5,y:yy+1},...o});pg.drawLine({start:{x:x+2.5,y:yy+1},end:{x:x+5,y:yy+5},...o})}};
+  const grp=(g,x,top,w,cols=1)=>{const[t,it]=CG[g];txt(t,x,top-7,6,B);it.forEach(([k,l],i)=>{const cx=x+(i%cols)*(w/cols),cy=top-17-Math.floor(i/cols)*10;box(cx,cy,!!D[g+'.'+k]);txt(l,cx+9,cy+1,7.5)})};
+  const gh=(g,cols)=>14+Math.ceil(CG[g][1].length/cols)*10;
+  const tbox=(s,min)=>{let L=wrap(s,CW-8,9);
+    for(;;){need(50);const av=y-(M+20),n=Math.max(1,Math.floor((av-6)/10.5)),take=L.splice(0,n),h=L.length?av:Math.min(av,Math.max(min,take.length*10.5+6));
+      rect(M,y-h,CW,h);take.forEach((l,j)=>txt(l,M+4,y-11-j*10.5,9));y-=h;if(!L.length)break;np(last()==='v'?'v':'c')}};
 
   np('p');
   bar('1. DATOS GENERALES Y LOCALIZACIÓN');
   row([{l:'FECHA DEL SERVICIO',v:fd(D.fecha),w:.18},{l:'ZONA DE LOCALIZACIÓN (ABP)',v:D.zona,w:.27},{l:'LUGAR DE SALIDA',v:D.lugar,w:.27},{l:'MOTIVO INICIAL DE ALERTA',v:D.motivo,w:.28}]);
   row([{l:'MUNICIPIO / DISTRITO',v:D.muni,w:.45},{l:'DIRECCIÓN PRECISA / PUNTO KILOMÉTRICO / REFERENCIA',v:D.dir,w:.55}]);
-  row(TIMES.map(([k,l])=>({l:l.toUpperCase(),v:D[k],w:1/6,al:'c'})),24);
+  row(TIMES.map(([k,l])=>({l:l.toUpperCase(),v:D[k],w:1/6,al:'c'})),20);
+  
   bar('2. CLASIFICACIÓN GENERAL DE LA ACTUACIÓN');
   {const h=Math.max(...['inc','sin','act','man'].map(g=>gh(g,1)));need(h);rect(M,y-h,CW,h);['inc','sin','act','man'].forEach((g,i)=>grp(g,M+4+i*CW/4,y,CW/4-6));y-=h}
+  
   bar('3. DOTACIONES DESPLAZADAS (HASTA 5 DOTACIONES)');
-  row([{v:'INDICATIVO',w:.14,b:1,sz:7,fill:LG},{v:'TIPO DE VEHÍCULO / FUNCIÓN',w:.46,b:1,sz:7,fill:LG},{v:'DOTACIÓN DE PERSONAL / CÓDIGO SALIDA',w:.4,b:1,sz:7,fill:LG}],12);
-  for(let i=0;i<5;i++)row([{v:'D-'+(i+1)+':',w:.14,sz:8},{v:D['dt'+i],w:.46,sz:8},{v:D['dp'+i],w:.4,sz:8}],12);
+  row([{v:'INDICATIVO',w:.14,b:1,sz:6.5,fill:LG},{v:'TIPO DE VEHÍCULO / FUNCIÓN',w:.46,b:1,sz:6.5,fill:LG},{v:'DOTACIÓN DE PERSONAL / CÓDIGO SALIDA',w:.4,b:1,sz:6.5,fill:LG}],10);
+  for(let i=0;i<5;i++)row([{v:'D-'+(i+1)+':',w:.14,sz:7.5},{v:D['dt'+i],w:.46,sz:7.5},{v:D['dp'+i],w:.4,sz:7.5}],10);
+  
   bar('3B. REGISTRO DE PERSONAL INTERVINIENTE');
-  row([{v:'CARGO / INDICATIVO',w:.2,b:1,sz:7,fill:LG},{v:'NOMBRE Y APELLIDOS',w:.4,b:1,sz:7,fill:LG},{v:'T.I.P. / N.I.P.',w:.17,b:1,sz:7,fill:LG},{v:'UNIDAD / VEHÍCULO',w:.23,b:1,sz:7,fill:LG}],12);
-  PERS.forEach((p,i)=>row([{v:p,w:.2,sz:8,b:i<4},{v:D['pn'+i],w:.4,sz:8},{v:D['pt'+i],w:.17,sz:8},{v:D['pu'+i],w:.23,sz:8}],12));
+  row([{v:'CARGO / INDICATIVO',w:.2,b:1,sz:6.5,fill:LG},{v:'NOMBRE Y APELLIDOS',w:.4,b:1,sz:6.5,fill:LG},{v:'T.I.P. / N.I.P.',w:.17,b:1,sz:6.5,fill:LG},{v:'UNIDAD / VEHÍCULO',w:.23,b:1,sz:6.5,fill:LG}],10);
+  PERS.forEach((p,i)=>row([{v:p,w:.2,sz:7.5,b:i<4},{v:D['pn'+i],w:.4,sz:7.5},{v:D['pt'+i],w:.17,sz:7.5},{v:D['pu'+i],w:.23,sz:7.5}],10));
+  
   bar('3C. CONTROL DE EPIS Y EQUIPOS DE PROTECCIÓN');
-  {const h=50;need(h);rect(M,y-h,CW,h);grp('epi',M+4,y,CW*.62-8,3);txt('Otro EPI (especificar): '+(D.otroepi||''),M+4,y-h+6,8);
-   const rx=M+CW*.64;txt('CONTROLERA / BOTELLAS',rx,y-9,6.5,B);txt('Cantidad bomberos con ERA: '+(D.era||'____'),rx,y-24,8);txt('Recargas de ERA necesarias: '+(D.recargas||'____'),rx,y-36,8);y-=h}
+  {const h=42;need(h);rect(M,y-h,CW,h);grp('epi',M+4,y,CW*.62-8,3);txt('Otro EPI (especificar): '+(D.otroepi||''),M+4,y-h+5,7.5);
+   const rx=M+CW*.64;txt('CONTROL ERA / BOTELLAS',rx,y-8,6,B);txt('Cantidad bomberos con ERA: '+(D.era||'____'),rx,y-20,7.5);txt('Recargas de ERA necesarias: '+(D.recargas||'____'),rx,y-31,7.5);y-=h}
+  
   bar('4. EVALUACIÓN Y CUERPOS EXTERNOS ACTUANTES');
-  {const h=46;need(h);rect(M,y-h,CW,h);grp('est',M+4,y,CW*.58-8,2);const rx=M+CW*.6;grp('cue',rx,y,CW*.4-6,3);txt('Especificar otros: '+(D.otrosesp||''),rx,y-h+5,7.5);y-=h}
+  {const h=40;need(h);rect(M,y-h,CW,h);grp('est',M+4,y,CW*.58-8,2);const rx=M+CW*.6;grp('cue',rx,y,CW*.4-6,3);txt('Especificar otros: '+(D.otrosesp||''),rx,y-h+4,7);y-=h}
+  
   bar('5. RELATO DESCRIPTIVO Y TÁCTICO DE LA INTERVENCIÓN');
-  tbox(D.relato,90);
+  tbox(D.relato,75);
+  
   bar('6. CONTROL DE VÍCTIMAS Y FIRMA DEL INFORME');
-  {const h=84;need(h);rect(M,y-h,CW,h);const mx=M+CW*.5;pg.drawLine({start:{x:mx,y:y},end:{x:mx,y:y-h},thickness:.6,color:K});
-   const q='¿EXISTENCIA DE VÍCTIMAS EN LA INTERVENCIÓN?';txt(q,M+CW*.25-B.widthOfTextAtSize(q,8.5)/2,y-34,8.5,B);
-   box(M+30,y-58,D.vict==='si');txt('SÍ (OBLIGATORIO CUMPLIMENTAR ANEXO)',M+42,y-57,7.5,B);box(M+CW*.5-50,y-58,D.vict==='no');txt('NO',M+CW*.5-39,y-57,8,B);
-   txt('FIRMA Y DATOS DEL AUTOR DEL INFORME',mx+6,y-9,6.5,B);txt('Nombre y Apellidos: '+(D.autor||''),mx+6,y-23,8);txt('T.I.P. / N.I.P.: '+(D.tip||''),mx+6,y-35,8);
-   rect(mx+6,y-h+5,CW*.5-12,38);txt('Firma',mx+CW*.5-34,y-h+9,6.5,F,GR);
-   if(D.firma){const im=await pdf.embedPng(D.firma),s=Math.min((CW*.5-20)/im.width,32/im.height);pg.drawImage(im,{x:mx+10,y:y-h+8,width:im.width*s,height:im.height*s})}
+  {const h=74;need(h);rect(M,y-h,CW,h);const mx=M+CW*.5;pg.drawLine({start:{x:mx,y:y},end:{x:mx,y:y-h},thickness:.5,color:K});
+   const q='¿EXISTENCIA DE VÍCTIMAS EN LA INTERVENCIÓN?';txt(q,M+CW*.25-B.widthOfTextAtSize(q,8)/2,y-28,8,B);
+   box(M+25,y-48,D.vict==='si');txt('SÍ (OBLIGATORIO CUMPLIMENTAR ANEXO)',M+35,y-47,7,B);box(M+CW*.5-45,y-48,D.vict==='no');txt('NO',M+CW*.5-34,y-47,7.5,B);
+   txt('FIRMA Y DATOS DEL AUTOR DEL INFORME',mx+6,y-8,6,B);txt('Nombre y Apellidos: '+(D.autor||''),mx+6,y-20,7.5);txt('T.I.P. / N.I.P.: '+(D.tip||''),mx+6,y-31,7.5);
+   rect(mx+6,y-h+4,CW*.5-12,34);txt('Firma',mx+CW*.5-30,y-h+7,6,F,GR);
+   if(D.firma){const im=await pdf.embedPng(D.firma),s=Math.min((CW*.5-20)/im.width,28/im.height);pg.drawImage(im,{x:mx+10,y:y-h+6,width:im.width*s,height:im.height*s})}
    y-=h}
 
   const anyV=D.vict==='si'||[0,1,2,3,4].some(i=>D['vn'+i]||D['vt'+i]||D['vu'+i]||D['vd'+i])||D.obs||Object.keys(D).some(k=>/^(tec|vit)\./.test(k)&&D[k]);
   if(anyV){
     np('v');bar('A1. RELACIÓN DE VÍCTIMAS (HASTA 5 VÍCTIMAS)');
-    row([{v:'ID',w:.07,b:1,sz:7,fill:LG},{v:'NOMBRE Y APELLIDOS / DNI',w:.28,b:1,sz:7,fill:LG},{v:'CATEGORÍA DE TRIAJE (MARCAR)',w:.25,b:1,sz:7,fill:LG},{v:'UBICACIÓN / HALLAZGO',w:.2,b:1,sz:7,fill:LG},{v:'DESTINO / TRASLADO SEM',w:.2,b:1,sz:7,fill:LG}],12);
-    for(let i=0;i<5;i++)row([{v:'V-0'+(i+1),w:.07,b:1,sz:8},{v:D['vn'+i],w:.28,sz:8},
-      {v:'',w:.25,draw:(x,yt,w)=>TR.forEach(([v,l],j)=>{const bx=x+4+(j%2)*(w/2),by=yt-14-Math.floor(j/2)*12;box(bx,by,D['vt'+i]===v);txt(l,bx+10,by+1,8)})},
-      {v:D['vu'+i],w:.2,sz:8},{v:D['vd'+i],w:.2,sz:8}],30);
+    row([{v:'ID',w:.07,b:1,sz:6.5,fill:LG},{v:'NOMBRE Y APELLIDOS / DNI',w:.28,b:1,sz:6.5,fill:LG},{v:'CATEGORÍA DE TRIAJE (MARCAR)',w:.25,b:1,sz:6.5,fill:LG},{v:'UBICACIÓN / HALLAZGO',w:.2,b:1,sz:6.5,fill:LG},{v:'DESTINO / TRASLADO SEM',w:.2,b:1,sz:6.5,fill:LG}],10);
+    for(let i=0;i<5;i++)row([{v:'V-0'+(i+1),w:.07,b:1,sz:7.5},{v:D['vn'+i],w:.28,sz:7.5},
+      {v:'',w:.25,draw:(x,yt,w)=>TR.forEach(([v,l],j)=>{const bx=x+3+(j%2)*(w/2),by=yt-12-Math.floor(j/2)*10;box(bx,by,D['vt'+i]===v);txt(l,bx+9,by+1,7.5)})},
+      {v:D['vu'+i],w:.2,sz:7.5},{v:D['vd'+i],w:.2,sz:7.5}],26);
     bar('A2. VALORACIÓN DE RESCATE Y MANIOBRAS DE EXCARCELACIÓN');
     {const h=gh('tec',1);need(h);rect(M,y-h,CW,h);grp('tec',M+4,y,CW/2-8);grp('vit',M+CW/2+4,y,CW/2-8);y-=h}
     bar('A3. OBSERVACIONES SANITARIAS Y DETALLES DE TRANSFERENCIA');
-    tbox(D.obs,260);
+    tbox(D.obs,220);
   }
   const ps=pdf.getPages();
-  ps.forEach((p,i)=>{pg=p;pg.drawLine({start:{x:M,y:M+12},end:{x:W-M,y:M+12},thickness:.6,color:K});
-    txt("Bombers de la Generalitat de Catalunya - Servei d'Emergències i Salvaments",M,M,6.5,B);
-    const c=kinds[i]==='v'?'Anexo de Víctimas':'Parte Principal';txt(c,W/2+40,M,6.5,B);
-    const n='Página '+(i+1)+' de '+ps.length;txt(n,W-M-B.widthOfTextAtSize(n,6.5),M,6.5,B)});
+  ps.forEach((p,i)=>{pg=p;pg.drawLine({start:{x:M,y:M+10},end:{x:W-M,y:M+10},thickness:.5,color:K});
+    txt("Bombers de la Generalitat de Catalunya - Servei d'Emergències i Salvaments",M,M+2,6,B);
+    const c=kinds[i]==='v'?'Anexo de Víctimas':'Parte Principal';txt(c,W/2+40,M+2,6,B);
+    const n='Página '+(i+1)+' de '+ps.length;txt(n,W-M-B.widthOfTextAtSize(n,6),M+2,6,B)});
   return pdf.save();
 }
 
