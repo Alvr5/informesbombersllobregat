@@ -95,12 +95,43 @@ const sec=(t,...k)=>el('section',{className:'sec'},el('h2',{textContent:t}),el('
 
 function pad(){
   const c=el('canvas',{id:'pad',width:920,height:260}),x=c.getContext('2d');let on=false;
-  if(D.firma){const im=new Image();im.onload=()=>x.drawImage(im,0,0,c.width,c.height);im.src=D.firma}
+  const drawSavedFirma=()=>{
+    x.clearRect(0,0,c.width,c.height);
+    if(!D.firma)return;
+    const im=new Image();
+    im.onload=()=>{x.clearRect(0,0,c.width,c.height);const scale=Math.min(c.width/im.width,c.height/im.height);const w=im.width*scale,h=im.height*scale;x.drawImage(im,(c.width-w)/2,(c.height-h)/2,w,h)};
+    im.src=D.firma;
+  };
+  if(D.firma)drawSavedFirma();
   const pt=e=>{const r=c.getBoundingClientRect();return[(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height]};
   c.onpointerdown=e=>{on=true;c.setPointerCapture(e.pointerId);const[a,b]=pt(e);x.strokeStyle='#111';x.lineWidth=5;x.lineCap=x.lineJoin='round';x.beginPath();x.moveTo(a,b);x.lineTo(a+.1,b+.1);x.stroke()};
   c.onpointermove=e=>{if(!on)return;const[a,b]=pt(e);x.lineTo(a,b);x.stroke()};
   c.onpointerup=c.onpointercancel=()=>{if(!on)return;on=false;D.firma=c.toDataURL('image/png');persist()};
-  return el('div',{className:'f full'},el('span',{textContent:'Firma'}),c,el('div',{},el('button',{textContent:'Borrar firma',onclick:()=>{x.clearRect(0,0,c.width,c.height);D.firma='';persist()}})));
+  const file=el('input',{type:'file',accept:'image/png,image/jpeg,image/webp',style:'display:block;margin:8px 0'});
+  file.onchange=()=>{
+    const f=file.files&&file.files[0];if(!f)return;
+    if(!['image/png','image/jpeg','image/webp'].includes(f.type)){toast('Selecciona una imagen PNG, JPG o WEBP');file.value='';return}
+    const reader=new FileReader();
+    reader.onerror=()=>toast('No se pudo leer la imagen');
+    reader.onload=()=>{
+      const im=new Image();
+      im.onerror=()=>toast('No se pudo abrir la imagen');
+      im.onload=()=>{
+        x.clearRect(0,0,c.width,c.height);
+        const scale=Math.min(c.width/im.width,c.height/im.height);
+        const w=im.width*scale,h=im.height*scale;
+        x.drawImage(im,(c.width-w)/2,(c.height-h)/2,w,h);
+        D.firma=c.toDataURL('image/png');persist();
+        toast('Firma cargada; aparecerá en el PDF');
+      };
+      im.src=reader.result;
+    };
+    reader.readAsDataURL(f);
+  };
+  const clear=()=>{x.clearRect(0,0,c.width,c.height);D.firma='';file.value='';persist()};
+  return el('div',{className:'f full'},el('span',{textContent:'Firma (puedes dibujarla o subir una imagen)'}),c,
+    el('div',{},el('label',{},'Subir firma desde imagen ',file)),
+    el('div',{},el('button',{textContent:'Borrar firma',onclick:clear})));
 }
 
 function render(){
